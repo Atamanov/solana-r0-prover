@@ -1,0 +1,10 @@
+{
+  "start_slot": 404118620,
+  "end_slot": 404118625,
+  "account_pubkeys": [
+    "2GNuM5ksdfNxGNbwf2hrnND9FHgQsdju7vz8CyGd7Zjy"
+  ],
+  "slot_chain_length": 6,
+  "account_changes_count": 66,
+  "vote_transactions_count": 0
+}
