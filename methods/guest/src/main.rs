@@ -566,7 +566,13 @@ fn verify_votes_intent_signatures_esr_and_supermajority(
     let mut total_voting_stake: u128 = 0;
     let mut all_ok = true;
 
+    // Track statistics for debugging
+    let mut votes_with_matching_hash = 0;
+    let mut votes_with_mismatched_hash = 0;
+    let mut total_votes_processed = 0;
+
     for vote_tx in vote_transactions {
+        total_votes_processed += 1;
         // 1) Transaction must be recorded at the last_slot.slot
         if vote_tx.slot != last_slot.slot {
             env::log(&format!(
@@ -580,23 +586,23 @@ fn verify_votes_intent_signatures_esr_and_supermajority(
         // 2) Vote intent must explicitly include the last slot number
         if !vote_tx.vote_slots.iter().any(|&s| s == last_slot.slot) {
             env::log(&format!(
-                "ERROR: Vote does not include the target slot {} in vote_slots: {:?}",
-                last_slot.slot, vote_tx.vote_slots
+                "WARNING: Vote in database doesn't include target slot {}",
+                last_slot.slot
             ));
-            all_ok = false;
+            // Skip this vote but don't fail the entire verification
             continue;
         }
 
-        // 3) Vote hash must equal the last slot's bank hash
+        // 3) Filter votes by bank hash - skip those that don't match
+        // This is expected behavior - not all votes will have the same hash
         match vote_tx.vote_hash {
-            Some(vh) if vh == last_slot.bank_hash => {}
+            Some(h) if h == last_slot.bank_hash => {
+                votes_with_matching_hash += 1;
+            }
             _ => {
-                env::log(&format!(
-                    "ERROR: Vote hash does not match last slot bank hash. Expected {}, got {:?}",
-                    bs58::encode(&last_slot.bank_hash).into_string(),
-                    vote_tx.vote_hash.map(|h| bs58::encode(&h).into_string())
-                ));
-                all_ok = false;
+                // This is normal - votes can have different hashes
+                // Just skip this vote, don't fail verification
+                votes_with_mismatched_hash += 1;
                 continue;
             }
         }
@@ -720,22 +726,45 @@ fn verify_votes_intent_signatures_esr_and_supermajority(
         }
     }
 
+    // Log vote processing statistics
+    env::log(&format!(
+        "Vote processing for slot {}: total_votes={}, matching_hash={}, mismatched_hash={}",
+        last_slot.slot, total_votes_processed, votes_with_matching_hash, votes_with_mismatched_hash
+    ));
+
     if !all_ok {
+        env::log("Vote verification failed due to signature or other validation errors");
         return false;
     }
 
     // 7) Supermajority check
     let total_active_stake = esr.total_active_stake as u128;
     let supermajority_ok = total_voting_stake * 3 >= total_active_stake * 2;
+
+    // Enhanced logging for consensus status
+    let percentage = if total_active_stake > 0 {
+        (total_voting_stake * 100) / total_active_stake
+    } else {
+        0
+    };
+    env::log(&format!(
+        "Consensus check for slot {}: voting_stake={} ({}%), total_stake={}, required=66.67%",
+        last_slot.slot, total_voting_stake, percentage, total_active_stake
+    ));
+
     if !supermajority_ok {
         env::log(&format!(
-            "ERROR: Supermajority not reached. Voting stake={} total={} (need >= 2/3)",
-            total_voting_stake, total_active_stake
+            "❌ Supermajority NOT reached for slot {} - only {}% of stake voted with matching hash",
+            last_slot.slot, percentage
+        ));
+        env::log(&format!(
+            "   Need at least {} stake, but only have {} stake from {} validators with matching bank hash",
+            (total_active_stake * 2) / 3, total_voting_stake, unique_voting_validators.len()
         ));
     } else {
         env::log(&format!(
-            "✅ Supermajority reached: voting_stake={} of total_stake={}",
-            total_voting_stake, total_active_stake
+            "✅ Supermajority reached for slot {} - {}% of stake voted with matching hash",
+            last_slot.slot, percentage
         ));
     }
 

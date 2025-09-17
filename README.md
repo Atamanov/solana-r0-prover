@@ -27,6 +27,7 @@ This project implements a zero-knowledge proof system for verifying Solana conse
 - **Merkle Proof Verification**: ESR inclusion proofs for vote accounts
 - **LtHash Verification**: Account state consistency using Solana's lattice hash
 - **Database Integration**: Real-time data fetching from Solana database with connection pooling
+- **JSON Import/Export**: Dump database input to JSON for testing and offline development
 - **Performance Optimized**: Connection pooling, TCP keepalive, and optimized query settings
 - **RISC Zero Optimized**: Built for RISC Zero zkVM with proper no_std support
 
@@ -37,9 +38,9 @@ cargo build --release
 
 ### Running
 
-The prover can be run in two modes:
+The prover can be run in several modes:
 
-1. **Validation Only** (fast, no proof generation):
+#### 1. **Validation Only** (fast, no proof generation):
 ```bash
 cargo run --bin proof_generator -- \
     --start-slot 12345 \
@@ -47,7 +48,7 @@ cargo run --bin proof_generator -- \
     --db-url "host=localhost port=5432 user=username password=password dbname=solana"
 ```
 
-2. **Full Proof Generation**:
+#### 2. **Full Proof Generation**:
 ```bash
 cargo run --bin proof_generator -- \
     --start-slot 12345 \
@@ -55,21 +56,98 @@ cargo run --bin proof_generator -- \
     --db-url "host=localhost port=5432 user=username password=password dbname=solana" \
     --prove
 ```
-3. **Example Data With Known Changes**:
 
+#### 3. **Dump Database Input to JSON** (for debugging/testing):
 ```bash
- cargo run --release --bin proof_generator -- --start-slot 404118620 --pubkey 2GNuM5ksdfNxGNbwf2hrnND9FHgQsdju7vz8CyGd7Zjy --db-url "host=3.16.49.73 port=5432
-  user=geyser_writer password=geyser_writer_password dbname=twine_solana_db" --prove
+cargo run --bin proof_generator -- \
+    --start-slot 12345 \
+    --pubkey ACCOUNT_PUBKEY_BASE58 \
+    --db-url "host=localhost port=5432 user=username password=password dbname=solana" \
+    --dump-json input_data.json
+```
+
+#### 4. **Read Input from JSON File** (offline testing):
+```bash
+cargo run --bin proof_generator -- \
+    --start-slot 12345 \
+    --pubkey ACCOUNT_PUBKEY_BASE58 \
+    --input-json input_data.json \
+    --prove
+```
+
+#### 5. **Example Data With Known Changes**:
+```bash
+cargo run --release --bin proof_generator -- \
+    --start-slot 404118620 \
+    --pubkey 2GNuM5ksdfNxGNbwf2hrnND9FHgQsdju7vz8CyGd7Zjy \
+    --db-url "host=3.16.49.73 port=5432 user=geyser_writer password=geyser_writer_password dbname=twine_solana_db" \
+    --prove
 ```
 
 ### Parameters
 
+#### Core Parameters
 - `--start-slot`: Starting slot number for the proof
 - `--pubkey`: Monitored account public keys (comma-separated, base58 encoded)
-- `--db-url`: PostgreSQL database connection string
 - `--output`: Output file for proof package (default: proof_package.json)
 - `--prove`: Generate actual ZK proof (otherwise just validate)
 - `--max-account-changes`: Maximum account changes to process (default: 10000)
+
+#### Data Source Parameters
+- `--db-url`: PostgreSQL database connection string (ignored if `--input-json` is specified)
+- `--dump-json FILE`: Dump database input to JSON file and exit (no proof generation)
+- `--input-json FILE`: Read input from JSON file instead of database
+
+#### JSON Workflow Examples
+
+**Workflow 1: Dump data for later use**
+```bash
+# Step 1: Dump database data to JSON
+cargo run --bin proof_generator -- \
+    --start-slot 12345 \
+    --pubkey ACCOUNT_PUBKEY_BASE58 \
+    --db-url "host=localhost port=5432 user=user password=pass dbname=solana" \
+    --dump-json test_data.json
+
+# Step 2: Use JSON data for testing/development (no database needed)
+cargo run --bin proof_generator -- \
+    --start-slot 12345 \
+    --pubkey ACCOUNT_PUBKEY_BASE58 \
+    --input-json test_data.json \
+    --prove
+```
+
+**Workflow 2: Offline development**
+```bash
+# Use pre-saved JSON data for development without database access
+cargo run --bin proof_generator -- \
+    --start-slot 12345 \
+    --pubkey ACCOUNT_PUBKEY_BASE58 \
+    --input-json saved_mainnet_data.json \
+    --prove
+```
+
+### JSON Functionality Benefits
+
+The JSON import/export functionality provides several advantages:
+
+#### **Development & Testing**
+- **Offline Development**: Work without database access using saved JSON data
+- **Reproducible Tests**: Use the same input data across multiple test runs
+- **Debugging**: Inspect exact input data that caused issues
+- **CI/CD Integration**: Use pre-saved test data in automated pipelines
+
+#### **Performance & Reliability**
+- **Faster Iteration**: Skip database queries during development
+- **Consistent Data**: Ensure identical input across different environments
+- **Backup & Archive**: Save historical data for future analysis
+- **Network Independence**: Run proofs without network connectivity
+
+#### **Use Cases**
+- **Mainnet Data Analysis**: Dump real mainnet data for local analysis
+- **Test Case Creation**: Create test cases from specific problematic slots
+- **Regression Testing**: Verify fixes work with previously failing data
+- **Performance Benchmarking**: Use consistent datasets for performance testing
 
 ### Database Requirements
 
