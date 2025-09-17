@@ -488,32 +488,30 @@ fn verify_vote_merkle_proof(
     active_stake: u64,
     proof: &[[u8; 32]],
     merkle_root: &[u8; 32],
-    leaf_index: usize,
+    mut leaf_index: usize,
 ) -> bool {
-    // Create leaf hash: hash(vote_account || active_stake)
-    let mut hasher = Blake3Hasher::new();
-    hasher.update(vote_account);
-    hasher.update(&active_stake.to_le_bytes());
-    let mut current_hash = hasher.finalize().as_bytes().clone();
+    // Leaf hash: Blake3(vote_account || count(1) || vote_account || stake || total_stake)
+    let mut h = Blake3Hasher::new();
+    h.update(vote_account);
+    h.update(&(1u32).to_le_bytes());
+    h.update(vote_account);
+    h.update(&active_stake.to_le_bytes());
+    h.update(&active_stake.to_le_bytes());
+    let mut current = *h.finalize().as_bytes();
 
-    // Traverse the merkle path
-    let mut index = leaf_index;
-    for sibling in proof {
-        let mut hasher = Blake3Hasher::new();
-        if index % 2 == 0 {
-            // Current node is left child
-            hasher.update(&current_hash);
-            hasher.update(sibling);
+    for sib in proof {
+        let mut hh = Blake3Hasher::new();
+        if leaf_index % 2 == 0 {
+            hh.update(&current);
+            hh.update(sib);
         } else {
-            // Current node is right child
-            hasher.update(sibling);
-            hasher.update(&current_hash);
+            hh.update(sib);
+            hh.update(&current);
         }
-        current_hash = hasher.finalize().as_bytes().clone();
-        index /= 2;
+        current = *hh.finalize().as_bytes();
+        leaf_index /= 2;
     }
-
-    current_hash == *merkle_root
+    current == *merkle_root
 }
 
 /// Dump proof package to JSON file
