@@ -86,7 +86,10 @@ mod base58_hashmap {
                         .into_vec()
                         .map_err(serde::de::Error::custom)?;
                     if key_bytes.len() != 32 {
-                        return Err(serde::de::Error::custom("Invalid key length"));
+                        return Err(serde::de::Error::custom(format!(
+                            "Invalid key length: expected 32 bytes, got {}",
+                            key_bytes.len()
+                        )));
                     }
                     let mut key = [0u8; 32];
                     key.copy_from_slice(&key_bytes);
