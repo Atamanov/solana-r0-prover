@@ -29,6 +29,9 @@ pub fn calculate_esr_merkle_root(validators: &[ZkValidatorSetEntry]) -> [u8; 32]
                 hasher.update(&pair[1]);
             } else {
                 // Odd number of nodes - hash with itself (CRITICAL: must match SP1)
+                // This duplication (hashing pair[0] + pair[0]) is required for compatibility with SP1's Merkle tree implementation,
+                // which expects the last node to be concatenated with itself before hashing when the number of nodes is odd.
+                // See SP1 documentation/specification for details.
                 hasher.update(&pair[0]);
             }
             next_level.push(*hasher.finalize().as_bytes());
