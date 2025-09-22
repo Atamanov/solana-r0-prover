@@ -31,6 +31,8 @@ mod base58_hashmap {
     use std::fmt;
 
     #[cfg(feature = "zkvm")]
+    use alloc::format;
+    #[cfg(feature = "zkvm")]
     use alloc::string::String;
     #[cfg(feature = "zkvm")]
     use alloc::vec::Vec;
